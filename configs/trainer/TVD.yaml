@@ -1,0 +1,10 @@
+defaults:
+  - finetune
+
+handler: TVD
+method_args:
+  base_model_name_or_path: ???   # required: HF Hub ID or local path to M0 (base model)
+  lambda_reconstruct: 1.0
+  lambda_data: 1.0
+  lambda_orth: 1.0
+  lambda_norm: 1.0
