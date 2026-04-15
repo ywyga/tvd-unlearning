@@ -51,20 +51,20 @@ class TVD(UnlearnTrainer):
         for p in m0.parameters():
             p.requires_grad_(False)
 
+        # --- Compute TV1 = M1 - M0 (fixed reference vector) ---
+        # Must be computed BEFORE wrapping m0 with DeepSpeed/accelerator, because
+        # ZeRO-3 shards parameters across ranks — accessing .parameters() after
+        # wrapping returns partial tensors that don't match self.model's full shapes.
+        with torch.no_grad():
+            self.tv1 = [
+                (p_m1.data - p_m0.data).cpu()
+                for p_m1, p_m0 in zip(self.model.parameters(), m0.parameters())
+            ]
+
         if self.is_deepspeed_enabled:
             self.ref_model = self._prepare_deepspeed(m0)
         else:
             self.ref_model = self.accelerator.prepare_model(m0, evaluation_mode=True)
-
-        # --- Compute TV1 = M1 - M0 (fixed reference vector) ---
-        # Stored as a list of CPU tensors to avoid occupying additional GPU memory.
-        with torch.no_grad():
-            self.tv1 = [
-                (p_m1.data - p_m0.data).cpu()
-                for p_m1, p_m0 in zip(
-                    self.model.parameters(), self.ref_model.parameters()
-                )
-            ]
 
         # Precompute ||TV1|| as a plain float for the scale-invariant L_norm.
         self.tv1_norm: float = (
