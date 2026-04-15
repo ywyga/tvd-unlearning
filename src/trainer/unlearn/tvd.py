@@ -1,6 +1,5 @@
 import copy
 import torch
-import torch.nn.functional as F
 from transformers import AutoModelForCausalLM
 from trainer.unlearn.base import UnlearnTrainer
 
@@ -51,20 +50,19 @@ class TVD(UnlearnTrainer):
         for p in m0.parameters():
             p.requires_grad_(False)
 
-        # --- Compute TV1 = M1 - M0 (fixed reference vector) ---
+        # --- Compute TV1 = M1 - M0 and store M0 params, both on CPU ---
         # Must be computed BEFORE wrapping m0 with DeepSpeed/accelerator, because
         # ZeRO-3 shards parameters across ranks — accessing .parameters() after
         # wrapping returns partial tensors that don't match self.model's full shapes.
+        # M0 params are kept on CPU (moved to device per-tensor in compute_loss)
+        # to avoid occupying a full model's worth of GPU memory with a frozen copy.
         with torch.no_grad():
-            self.tv1 = [
-                (p_m1.data - p_m0.data).cpu()
-                for p_m1, p_m0 in zip(self.model.parameters(), m0.parameters())
-            ]
-
-        if self.is_deepspeed_enabled:
-            self.ref_model = self._prepare_deepspeed(m0)
-        else:
-            self.ref_model = self.accelerator.prepare_model(m0, evaluation_mode=True)
+            self.tv1 = []
+            self.m0_params = []
+            for p_m1, p_m0 in zip(self.model.parameters(), m0.parameters()):
+                self.tv1.append((p_m1.data - p_m0.data).cpu())
+                self.m0_params.append(p_m0.data.cpu())
+        # m0 is no longer needed on GPU; let it go out of scope to free memory.
 
         # Precompute ||TV1|| as a plain float for the scale-invariant L_norm.
         self.tv1_norm: float = (
@@ -103,40 +101,44 @@ class TVD(UnlearnTrainer):
         # L_data: combined NLL on retain / forget data
         l_data = retain_outputs.loss + forget_outputs.loss
 
-        # Build differentiable task vectors TV_retain and TV_forget.
-        # Parameters are iterated positionally across all three models.
-        # ref_param is detached so gradients only flow through param_r / param_f.
-        tv_retain, tv_forget = [], []
-        for param_r, param_f, ref_param in zip(
+        device = next(model.parameters()).device
+
+        # Compute all task-vector losses in a single parameter loop.
+        # Avoids building tv_retain/tv_forget lists and, critically, avoids
+        # torch.cat over all params (which would create two full-model-sized
+        # contiguous tensors just to compute a dot product and two norms).
+        # M0 params live on CPU and are moved to device one tensor at a time.
+        l_reconstruct = torch.tensor(0.0, device=device)
+        dot = torch.tensor(0.0, device=device)
+        retain_norm_sq = torch.tensor(0.0, device=device)
+        forget_norm_sq = torch.tensor(0.0, device=device)
+        n_layers = 0
+
+        for param_r, param_f, m0_p, tv1_p in zip(
             model.parameters(),
             self.forget_model.parameters(),
-            self.ref_model.parameters(),
+            self.m0_params,
+            self.tv1,
         ):
-            ref = ref_param.detach()
-            tv_retain.append(param_r - ref)
-            tv_forget.append(param_f - ref)
+            ref = m0_p.to(device)
+            tr = param_r - ref
+            tf = param_f - ref
+            l_reconstruct = l_reconstruct + (tr + tf - tv1_p.to(device)).pow(2).mean()
+            dot = dot + (tr * tf).sum()
+            retain_norm_sq = retain_norm_sq + tr.pow(2).sum()
+            forget_norm_sq = forget_norm_sq + tf.pow(2).sum()
+            n_layers += 1
 
-        device = tv_retain[0].device
+        l_reconstruct = l_reconstruct / n_layers
 
-        # L_reconstruct: ||TV_retain + TV_forget - TV1||^2
-        # Averaged element-wise over all parameter tensors to be scale-neutral.
-        l_reconstruct = torch.stack([
-            (tr + tf - tv1_p.to(device)).pow(2).mean()
-            for tr, tf, tv1_p in zip(tv_retain, tv_forget, self.tv1)
-        ]).mean()
-
-        # Flatten task vectors for vector-level losses
-        retain_flat = torch.cat([v.reshape(-1) for v in tv_retain])
-        forget_flat = torch.cat([v.reshape(-1) for v in tv_forget])
+        retain_norm = retain_norm_sq.sqrt()
+        forget_norm = forget_norm_sq.sqrt()
 
         # L_orth: squared cosine similarity — drives TV_retain ⊥ TV_forget
-        cos_sim = F.cosine_similarity(
-            retain_flat.unsqueeze(0), forget_flat.unsqueeze(0)
-        )
+        cos_sim = dot / (retain_norm * forget_norm + 1e-8)
         l_orth = cos_sim.pow(2)
 
         # L_norm: scale-invariant penalty — (||TV_retain|| / ||TV1|| - 1)^2
-        retain_norm = retain_flat.norm()
         l_norm = (retain_norm / (self.tv1_norm + 1e-8) - 1.0).pow(2)
 
         loss = (
