@@ -48,6 +48,17 @@ for split in "${splits[@]}"; do
     holdout_split=$(echo $split | cut -d' ' -f2)
     retain_split=$(echo $split | cut -d' ' -f3)
 
+    # Only pass retain_logs_path when the file exists. Passing a non-null path
+    # that doesn't exist causes a hard crash in the evaluator. When null,
+    # forget_quality and privleak metrics are skipped gracefully.
+    retain_logs_json="saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json"
+    if [ -f "$retain_logs_json" ]; then
+        retain_logs_arg="retain_logs_path=${retain_logs_json}"
+    else
+        echo "Warning: ${retain_logs_json} not found — forget_quality/privleak metrics will be skipped."
+        retain_logs_arg="retain_logs_path=null"
+    fi
+
     for trainer_experiment in "${trainers_experiments[@]}"; do
         trainer=$(echo $trainer_experiment | awk '{print $1}')
         experiment=$(echo $trainer_experiment | awk '{print $2}')
@@ -78,7 +89,7 @@ for split in "${splits[@]}"; do
             forget_split=${forget_split} \
             retain_split=${retain_split} \
             model.model_args.pretrained_model_name_or_path=${model_path} \
-            retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json \
+            ${retain_logs_arg} \
             trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
             trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
             ${extra_args}
@@ -92,6 +103,6 @@ for split in "${splits[@]}"; do
             task_name=${task_name} \
             model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
             paths.output_dir=saves/unlearn/${task_name}/evals \
-            retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json
+            ${retain_logs_arg}
     done
 done
