@@ -64,13 +64,13 @@ for split in "${splits[@]}"; do
         trainer=$(echo $trainer_experiment | awk '{print $1}')
         experiment=$(echo $trainer_experiment | awk '{print $2}')
 
-        task_name=tofu_${model}_${forget_split}_${trainer}
         model_path=saves/finetune/tofu_${model}_full
-        echo "${task_name}: Unlearning ${model_path} using ${trainer}"
 
-        # Build trainer-specific extra args
+        # Build trainer-specific extra args; for TVD encode lambdas in task_name
+        # so runs with different hyperparameters don't overwrite each other.
         extra_args=""
         if [ "$trainer" = "TVD" ]; then
+            task_name=tofu_${model}_${forget_split}_TVD_r${LAMBDA_RECONSTRUCT}_d${LAMBDA_DATA}_o${LAMBDA_ORTH}_n${LAMBDA_NORM}
             extra_args="trainer.method_args.base_model_name_or_path=${base_model} \
                 trainer.method_args.lambda_reconstruct=${LAMBDA_RECONSTRUCT} \
                 trainer.method_args.lambda_data=${LAMBDA_DATA} \
@@ -78,8 +78,11 @@ for split in "${splits[@]}"; do
                 trainer.method_args.lambda_norm=${LAMBDA_NORM} \
                 trainer.args.gradient_checkpointing=false"
         else
+            task_name=tofu_${model}_${forget_split}_${trainer}
             extra_args="trainer.args.gradient_checkpointing=true"
         fi
+
+        echo "${task_name}: Unlearning ${model_path} using ${trainer}"
 
         # Unlearn
         CUDA_VISIBLE_DEVICES=0 python src/train.py --config-name=unlearn.yaml \
