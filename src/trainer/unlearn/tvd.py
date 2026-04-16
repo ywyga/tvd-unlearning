@@ -100,14 +100,17 @@ class TVD(UnlearnTrainer):
             for k in ["input_ids", "attention_mask", "labels"]
         }
 
+        # Unwrap the Trainer/Accelerate model wrapper so the forward call
+        # behaves identically to forget_model (a plain deepcopy). Without this,
+        # the wrapper returns a partial loss tensor (e.g. 7 elements from a
+        # 14-sample batch) instead of the standard mean-reduced scalar.
+        base_model = getattr(model, "module", model)
+
         # Forward passes for both trainable models
-        retain_outputs = model(**retain_inputs)           # M_retain on retain data
+        retain_outputs = base_model(**retain_inputs)         # M_retain on retain data
         forget_outputs = self.forget_model(**forget_inputs)  # M_forget on forget data
 
-        # L_data: combined NLL on retain / forget data.
-        # .mean() normalises both terms to scalars — newer transformers returns
-        # per-sample losses from the Trainer-managed model while forget_model
-        # (a plain deepcopy) still returns a mean-reduced scalar.
+        # L_data: combined NLL on retain / forget data
         l_data = retain_outputs.loss.mean() + forget_outputs.loss.mean()
 
         device = next(model.parameters()).device
