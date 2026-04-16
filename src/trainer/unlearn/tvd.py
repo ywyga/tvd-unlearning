@@ -1,4 +1,5 @@
 import copy
+import os
 import torch
 from transformers import AutoModelForCausalLM
 from trainer.unlearn.base import UnlearnTrainer
@@ -81,6 +82,11 @@ class TVD(UnlearnTrainer):
             {"params": forget_params, "lr": self.args.learning_rate}
         )
         return self.optimizer
+
+    def save_model(self, output_dir=None, _internal_call=False):
+        super().save_model(output_dir=output_dir, _internal_call=_internal_call)
+        save_dir = output_dir or self.args.output_dir
+        self.forget_model.save_pretrained(os.path.join(save_dir, "forget_model"))
 
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
