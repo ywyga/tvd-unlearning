@@ -16,12 +16,12 @@ model="phi-1_5"
 base_model="microsoft/phi-1_5"   # frozen M0 for TVD
 
 trainers_experiments=(
+    "TVD        unlearn/tofu/default.yaml"
     "GradAscent unlearn/tofu/default.yaml"
     "GradDiff   unlearn/tofu/default.yaml"
     "NPO        unlearn/tofu/default.yaml"
     "DPO        unlearn/tofu/idk.yaml"
     "RMU        unlearn/tofu/default.yaml"
-    "TVD        unlearn/tofu/default.yaml"
 )
 
 splits=(
