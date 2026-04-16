@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 #
 # Runs unlearning + TOFU evaluation for microsoft/phi-1_5 on a single GPU.
 # Assumes retain and full finetune checkpoints already exist (run
