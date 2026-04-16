@@ -104,8 +104,11 @@ class TVD(UnlearnTrainer):
         retain_outputs = model(**retain_inputs)           # M_retain on retain data
         forget_outputs = self.forget_model(**forget_inputs)  # M_forget on forget data
 
-        # L_data: combined NLL on retain / forget data
-        l_data = retain_outputs.loss + forget_outputs.loss
+        # L_data: combined NLL on retain / forget data.
+        # .mean() normalises both terms to scalars — newer transformers returns
+        # per-sample losses from the Trainer-managed model while forget_model
+        # (a plain deepcopy) still returns a mean-reduced scalar.
+        l_data = retain_outputs.loss.mean() + forget_outputs.loss.mean()
 
         device = next(model.parameters()).device
 
