@@ -90,7 +90,7 @@ for split in "${splits[@]}"; do
             forget_split=${forget_split} \
             retain_split=${retain_split} \
             model.model_args.pretrained_model_name_or_path=${model_path} \
-            model.model_args.torch_dtype=bfloat16 \
+            ++model.model_args.torch_dtype=bfloat16 \
             ${retain_logs_arg} \
             trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
             trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
