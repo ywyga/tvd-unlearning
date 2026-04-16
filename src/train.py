@@ -1,5 +1,6 @@
+import os
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from data import get_data, get_collators
 from model import get_model
 from trainer import load_trainer
@@ -60,6 +61,7 @@ def main(cfg: DictConfig):
         trainer.train()
         trainer.save_state()
         trainer.save_model(trainer_args.output_dir)
+        OmegaConf.save(cfg, os.path.join(trainer_args.output_dir, "training_config.yaml"))
 
     if trainer_args.do_eval:
         trainer.evaluate(metric_key_prefix="eval")
