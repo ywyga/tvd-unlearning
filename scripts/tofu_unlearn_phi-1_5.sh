@@ -34,10 +34,10 @@ per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 
 # TVD loss weights (override via env vars or edit directly)
-LAMBDA_RECONSTRUCT=${LAMBDA_RECONSTRUCT:1.0}
-LAMBDA_DATA=${LAMBDA_DATA:1.0}
-LAMBDA_ORTH=${LAMBDA_ORTH:1.0}
-LAMBDA_NORM=${LAMBDA_NORM:0.01}
+LAMBDA_RECONSTRUCT=${LAMBDA_RECONSTRUCT:-1.0}
+LAMBDA_DATA=${LAMBDA_DATA:-1.0}
+LAMBDA_ORTH=${LAMBDA_ORTH:-1.0}
+LAMBDA_NORM=${LAMBDA_NORM:-0.01}
 
 
 ########################################################################################################################
