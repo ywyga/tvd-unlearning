@@ -33,6 +33,8 @@ splits=(
 per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 
+LEARNING_RATE=${LEARNING_RATE:-1e-5}
+
 # TVD loss weights (override via env vars or edit directly)
 LAMBDA_RECONSTRUCT=${LAMBDA_RECONSTRUCT:-1.0}
 LAMBDA_DATA=${LAMBDA_DATA:-1.0}
@@ -70,16 +72,18 @@ for split in "${splits[@]}"; do
         # so runs with different hyperparameters don't overwrite each other.
         extra_args=""
         if [ "$trainer" = "TVD" ]; then
-            task_name=tofu_${model}_${forget_split}_TVD_r${LAMBDA_RECONSTRUCT}_d${LAMBDA_DATA}_o${LAMBDA_ORTH}_n${LAMBDA_NORM}
+            task_name=tofu_${model}_${forget_split}_TVD_lr${LEARNING_RATE}_r${LAMBDA_RECONSTRUCT}_d${LAMBDA_DATA}_o${LAMBDA_ORTH}_n${LAMBDA_NORM}
             extra_args="trainer.method_args.base_model_name_or_path=${base_model} \
                 trainer.method_args.lambda_reconstruct=${LAMBDA_RECONSTRUCT} \
                 trainer.method_args.lambda_data=${LAMBDA_DATA} \
                 trainer.method_args.lambda_orth=${LAMBDA_ORTH} \
                 trainer.method_args.lambda_norm=${LAMBDA_NORM} \
+                trainer.args.learning_rate=${LEARNING_RATE} \
                 trainer.args.gradient_checkpointing=false"
         else
-            task_name=tofu_${model}_${forget_split}_${trainer}
-            extra_args="trainer.args.gradient_checkpointing=true"
+            task_name=tofu_${model}_${forget_split}_${trainer}_lr${LEARNING_RATE}
+            extra_args="trainer.args.learning_rate=${LEARNING_RATE} \
+                trainer.args.gradient_checkpointing=true"
         fi
 
         echo "${task_name}: Unlearning ${model_path} using ${trainer}"
