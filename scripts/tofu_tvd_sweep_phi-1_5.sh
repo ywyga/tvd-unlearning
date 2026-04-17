@@ -24,7 +24,7 @@ gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 num_train_epochs=20
 
 # Set DTYPE=default to use the model's default dtype instead of bfloat16.
-if [ "${DTYPE:-bfloat16}" = "default" ]; then
+if [ "${DTYPE:-default}" = "default" ]; then
     dtype_arg=""
 else
     dtype_arg="++model.model_args.torch_dtype=bfloat16"
