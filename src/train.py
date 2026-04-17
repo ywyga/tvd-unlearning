@@ -58,10 +58,10 @@ def main(cfg: DictConfig):
     )
 
     if trainer_args.do_train:
+        OmegaConf.save(cfg, os.path.join(trainer_args.output_dir, "training_config.yaml"))
         trainer.train()
         trainer.save_state()
         trainer.save_model(trainer_args.output_dir)
-        OmegaConf.save(cfg, os.path.join(trainer_args.output_dir, "training_config.yaml"))
 
     if trainer_args.do_eval:
         trainer.evaluate(metric_key_prefix="eval")
