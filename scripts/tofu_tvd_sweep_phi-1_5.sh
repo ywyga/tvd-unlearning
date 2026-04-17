@@ -14,11 +14,16 @@ set -e
 #
 # To disable bfloat16 (use model default dtype instead):
 #   DTYPE=default bash scripts/tofu_tvd_sweep_phi-1_5.sh
+#
+# To group results under a subfolder:
+#   GROUP=sweep_v1 bash scripts/tofu_tvd_sweep_phi-1_5.sh
+#   → saves to saves/unlearn/sweep_v1/<task_name>/
 
 model="phi-1_5"
 base_model="microsoft/phi-1_5"
 model_path="saves/finetune/tofu_${model}_full"
 
+gpu=0
 per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 num_train_epochs=20
@@ -28,6 +33,13 @@ if [ "${DTYPE:-default}" = "default" ]; then
     dtype_arg=""
 else
     dtype_arg="++model.model_args.torch_dtype=bfloat16"
+fi
+
+# Output directory prefix — set GROUP to nest results in a subfolder.
+if [ -n "${GROUP}" ]; then
+    unlearn_dir="saves/unlearn/${GROUP}"
+else
+    unlearn_dir="saves/unlearn"
 fi
 
 ########################################################################################################################
@@ -99,7 +111,7 @@ for split in "${splits[@]}"; do
             echo "[$run/$total] ${task_name}"
 
             # Unlearn
-            CUDA_VISIBLE_DEVICES=0 python src/train.py --config-name=unlearn.yaml \
+            CUDA_VISIBLE_DEVICES=${gpu} python src/train.py --config-name=unlearn.yaml \
                 experiment=unlearn/tofu/default.yaml \
                 trainer=TVD \
                 task_name=${task_name} \
@@ -107,6 +119,7 @@ for split in "${splits[@]}"; do
                 forget_split=${forget_split} \
                 retain_split=${retain_split} \
                 model.model_args.pretrained_model_name_or_path=${model_path} \
+                paths.output_dir=${unlearn_dir}/${task_name} \
                 ${dtype_arg} \
                 ${retain_logs_arg} \
                 trainer.args.learning_rate=${lr_clean} \
@@ -121,14 +134,14 @@ for split in "${splits[@]}"; do
                 trainer.method_args.lambda_norm=${n}
 
             # Eval
-            CUDA_VISIBLE_DEVICES=0 python src/eval.py \
+            CUDA_VISIBLE_DEVICES=${gpu} python src/eval.py \
                 experiment=eval/tofu/default.yaml \
                 forget_split=${forget_split} \
                 holdout_split=${holdout_split} \
                 model=${model} \
                 task_name=${task_name} \
-                model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
-                paths.output_dir=saves/unlearn/${task_name}/evals \
+                model.model_args.pretrained_model_name_or_path=${unlearn_dir}/${task_name} \
+                paths.output_dir=${unlearn_dir}/${task_name}/evals \
                 ${retain_logs_arg}
         done
     done
