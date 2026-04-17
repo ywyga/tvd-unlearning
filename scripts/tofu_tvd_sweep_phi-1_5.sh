@@ -11,6 +11,9 @@ set -e
 #
 # To restrict to a single forget split, set FORGET_SPLIT before running:
 #   FORGET_SPLIT=forget10 bash scripts/tofu_tvd_sweep_phi-1_5.sh
+#
+# To disable bfloat16 (use model default dtype instead):
+#   DTYPE=default bash scripts/tofu_tvd_sweep_phi-1_5.sh
 
 model="phi-1_5"
 base_model="microsoft/phi-1_5"
@@ -19,6 +22,13 @@ model_path="saves/finetune/tofu_${model}_full"
 per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 num_train_epochs=20
+
+# Set DTYPE=default to use the model's default dtype instead of bfloat16.
+if [ "${DTYPE:-bfloat16}" = "default" ]; then
+    dtype_arg=""
+else
+    dtype_arg="++model.model_args.torch_dtype=bfloat16"
+fi
 
 ########################################################################################################################
 # Hyperparameter grid — edit these arrays to add/remove values
@@ -97,7 +107,7 @@ for split in "${splits[@]}"; do
                 forget_split=${forget_split} \
                 retain_split=${retain_split} \
                 model.model_args.pretrained_model_name_or_path=${model_path} \
-                ++model.model_args.torch_dtype=bfloat16 \
+                ${dtype_arg} \
                 ${retain_logs_arg} \
                 trainer.args.learning_rate=${lr_clean} \
                 trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \

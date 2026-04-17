@@ -11,6 +11,9 @@ set -e
 #
 # TVD-specific lambda overrides:
 #   LAMBDA_RECONSTRUCT=1.0 LAMBDA_DATA=1.0 bash scripts/tofu_unlearn_phi-1_5.sh
+#
+# To disable bfloat16 (use model default dtype instead):
+#   DTYPE=default bash scripts/tofu_unlearn_phi-1_5.sh
 
 model="phi-1_5"
 base_model="microsoft/phi-1_5"   # frozen M0 for TVD
@@ -32,6 +35,13 @@ splits=(
 
 per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
+
+# Set DTYPE=default to use the model's default dtype instead of bfloat16.
+if [ "${DTYPE:-bfloat16}" = "default" ]; then
+    dtype_arg=""
+else
+    dtype_arg="++model.model_args.torch_dtype=bfloat16"
+fi
 
 LEARNING_RATE=${LEARNING_RATE:-1e-5}
 
@@ -97,7 +107,7 @@ for split in "${splits[@]}"; do
             forget_split=${forget_split} \
             retain_split=${retain_split} \
             model.model_args.pretrained_model_name_or_path=${model_path} \
-            ++model.model_args.torch_dtype=bfloat16 \
+            ${dtype_arg} \
             ${retain_logs_arg} \
             trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
             trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
