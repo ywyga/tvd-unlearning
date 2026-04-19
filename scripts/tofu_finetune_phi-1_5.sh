@@ -17,6 +17,7 @@ splits=(
     "forget10 holdout10 retain90"
 )
 
+gpu=0
 per_device_train_batch_size=4
 gradient_accumulation_steps=8   # effective batch size 32 on single GPU
 
@@ -37,7 +38,7 @@ for split in "${splits[@]}"; do
     holdout_split=$(echo $split | cut -d' ' -f2)
     retain_split=$(echo $split | cut -d' ' -f3)
 
-    CUDA_VISIBLE_DEVICES=0 python src/train.py experiment=finetune/tofu/default.yaml \
+    CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/tofu/default.yaml \
         task_name=tofu_${model}_${retain_split} \
         model=${model} \
         ${dtype_arg} \
@@ -47,7 +48,7 @@ for split in "${splits[@]}"; do
         trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
         trainer.args.gradient_checkpointing=true
 
-    CUDA_VISIBLE_DEVICES=0 python src/eval.py experiment=eval/tofu/default.yaml \
+    CUDA_VISIBLE_DEVICES=${gpu} python src/eval.py experiment=eval/tofu/default.yaml \
         forget_split=${forget_split} \
         holdout_split=${holdout_split} \
         task_name=tofu_${model}_${retain_split} \
@@ -61,7 +62,7 @@ done
 ########################################### FULL Finetuned TOFU ########################################################
 ########################################################################################################################
 
-CUDA_VISIBLE_DEVICES=0 python src/train.py experiment=finetune/tofu/default.yaml \
+CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/tofu/default.yaml \
     task_name=tofu_${model}_full \
     model=${model} \
     ${dtype_arg} \
@@ -76,7 +77,7 @@ for split in "${splits[@]}"; do
     holdout_split=$(echo $split | cut -d' ' -f2)
     retain_split=$(echo $split | cut -d' ' -f3)
 
-    CUDA_VISIBLE_DEVICES=0 python src/eval.py experiment=eval/tofu/default.yaml \
+    CUDA_VISIBLE_DEVICES=${gpu} python src/eval.py experiment=eval/tofu/default.yaml \
         forget_split=${forget_split} \
         holdout_split=${holdout_split} \
         task_name=tofu_${model}_full_${forget_split} \

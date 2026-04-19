@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""
+Collect TOFU evaluation results from all TOFU_SUMMARY.json files found
+under a saves directory and write them to a single Excel file.
+
+Usage:
+    python scripts/collect_tofu_results.py [saves_dir] [--output results.xlsx]
+
+The script finds every TOFU_SUMMARY.json recursively, infers the task name
+from the path, and parses model / method / hyperparameters from it.
+
+Recognised task-name patterns
+------------------------------
+  tofu_{model}_{forget_split}_TVD_lr{lr}_r{r}_d{d}_o{o}_n{n}
+  tofu_{model}_{forget_split}_{method}_lr{lr}
+  tofu_{model}_{forget_split}_{method}          (no lr in name)
+  tofu_{model}_full[_{forget_split}]            (finetune baseline)
+  tofu_{model}_{retain_split}                  (retain baseline)
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+try:
+    import pandas as pd
+except ImportError:
+    sys.exit("pandas is required:  pip install pandas openpyxl")
+
+
+# ── Ordered columns in the output sheet ───────────────────────────────────────
+
+METADATA_COLS = [
+    "task_name",
+    "model",
+    "forget_split",
+    "method",
+    "lr",
+    "lambda_reconstruct",
+    "lambda_data",
+    "lambda_orth",
+    "lambda_norm",
+    "path",
+]
+
+METRIC_COLS = [
+    "forget_Truth_Ratio",
+    "forget_Q_A_Prob",
+    "forget_Q_A_ROUGE",
+    "extraction_strength",
+    "forget_quality",
+    "privleak",
+    "model_utility",
+]
+
+# Arrow appended to each metric column header.
+# ↑ = higher is better,  ↓ = lower is better,  ≈0 = closer to 0 is better
+METRIC_DIRECTION = {
+    "forget_Truth_Ratio": "↑",
+    "forget_Q_A_Prob":    "↓",
+    "forget_Q_A_ROUGE":   "↓",
+    "extraction_strength": "↓",
+    "forget_quality":     "↑",
+    "privleak":           "≈0",
+    "model_utility":      "↑",
+}
+
+ALL_COLS = METADATA_COLS + METRIC_COLS
+
+# ── Task-name parsing ──────────────────────────────────────────────────────────
+
+# Forget splits are always forget01 / forget05 / forget10
+_FORGET_RE = re.compile(r"_(forget\d+)_(.*)")
+
+# TVD suffix:  TVD_lr{lr}_r{r}_d{d}_o{o}_n{n}
+_TVD_RE = re.compile(
+    r"TVD_lr([^_]+)_r([^_]+)_d([^_]+)_o([^_]+)_n([^_]+)$"
+)
+
+# Other methods: {Method}_lr{lr}
+_METHOD_LR_RE = re.compile(r"([A-Za-z][A-Za-z0-9]*)_lr([^_].*)$")
+
+# Retain split names: retain99 / retain95 / retain90
+_RETAIN_RE = re.compile(r"retain\d+$")
+
+
+def parse_task_name(task_name: str) -> dict:
+    """Return a dict of parsed fields from a task_name string."""
+    info: dict = {k: None for k in METADATA_COLS}
+    info["task_name"] = task_name
+
+    if not task_name.startswith("tofu_"):
+        return info
+
+    body = task_name[len("tofu_"):]
+
+    # ── Does the name contain a forget split? ─────────────────────────────────
+    m = _FORGET_RE.search(body)
+    if m:
+        info["model"] = body[: m.start()]
+        info["forget_split"] = m.group(1)
+        method_part = m.group(2)
+
+        # TVD?
+        tvd = _TVD_RE.match(method_part)
+        if tvd:
+            info["method"] = "TVD"
+            info["lr"] = tvd.group(1)
+            info["lambda_reconstruct"] = _maybe_float(tvd.group(2))
+            info["lambda_data"] = _maybe_float(tvd.group(3))
+            info["lambda_orth"] = _maybe_float(tvd.group(4))
+            info["lambda_norm"] = _maybe_float(tvd.group(5))
+        else:
+            other = _METHOD_LR_RE.match(method_part)
+            if other:
+                info["method"] = other.group(1)
+                info["lr"] = other.group(2)
+            else:
+                # Method name only, no lr encoded
+                info["method"] = method_part
+
+    else:
+        # No forget split → finetune baseline (full or retain)
+        # body is e.g. "phi-1_5_full" or "phi-1_5_retain99"
+        # The last token after the final underscore-group is the split name.
+        # Model names may themselves contain underscores, so we check the suffix.
+        if body.endswith("_full"):
+            info["model"] = body[: -len("_full")]
+            info["method"] = "full"
+        else:
+            rm = _RETAIN_RE.search(body)
+            if rm:
+                info["model"] = body[: rm.start() - 1]  # -1 for the underscore
+                info["method"] = rm.group(0)             # e.g. "retain99"
+            else:
+                # Fallback: treat entire body as model name
+                info["model"] = body
+
+    return info
+
+
+def _maybe_float(s: str):
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return s
+
+
+# ── Path → task_name + forget_split inference ─────────────────────────────────
+
+_EVALS_FORGET_RE = re.compile(r"^evals_(forget\d+)$")
+_FORGET_PART_RE = re.compile(r"^forget\d+$")
+
+
+def infer_from_path(summary_file: Path) -> tuple[str, str | None]:
+    """
+    Return (task_name, forget_split_override).
+
+    task_name is the first path component that starts with 'tofu_'.
+    forget_split_override is set when the forget split can be read from the
+    path but is not encoded in task_name (e.g. full-model evals stored under
+    saves/eval/tofu_<model>_full/evals_forget10/).
+    """
+    parts = summary_file.parts
+    task_name: str | None = None
+    forget_override: str | None = None
+
+    for part in parts:
+        if part.startswith("tofu_"):
+            task_name = part
+            break
+
+    # Detect forget split from an evals_{split} or bare forget\d+ directory
+    for part in parts:
+        m = _EVALS_FORGET_RE.match(part)
+        if m:
+            forget_override = m.group(1)
+            break
+        if _FORGET_PART_RE.match(part):
+            forget_override = part
+            break
+
+    if task_name is None:
+        # Last-resort fallback
+        parent = summary_file.parent
+        task_name = parent.parent.name if parent.name.startswith("evals") else parent.name
+
+    return task_name, forget_override
+
+
+# ── Main collection ────────────────────────────────────────────────────────────
+
+def collect_results(saves_dir: Path) -> list[dict]:
+    rows = []
+    for summary_file in sorted(saves_dir.rglob("TOFU_SUMMARY.json")):
+        try:
+            with open(summary_file, encoding="utf-8") as fh:
+                summary = json.load(fh)
+        except Exception as exc:
+            print(f"Warning: could not read {summary_file}: {exc}", file=sys.stderr)
+            continue
+
+        task_name, forget_override = infer_from_path(summary_file)
+        row = parse_task_name(task_name)
+
+        # For full/retain baselines the forget split is in the directory, not
+        # the task name — fill it in so the row can be joined with unlearn rows.
+        if forget_override and row["forget_split"] is None:
+            row["forget_split"] = forget_override
+
+        row["path"] = str(summary_file.relative_to(saves_dir))
+
+        for metric in METRIC_COLS:
+            row[metric] = summary.get(metric, None)
+
+        rows.append(row)
+
+    return rows
+
+
+# ── Excel output ───────────────────────────────────────────────────────────────
+
+def write_excel(rows: list[dict], output: Path) -> None:
+    df = pd.DataFrame(rows, columns=ALL_COLS)
+
+    # Sort: model → forget_split → method, putting None last
+    df = df.sort_values(
+        ["model", "forget_split", "method"],
+        key=lambda col: col.fillna("\xff"),  # sorts None/NaN after real strings
+        na_position="last",
+    )
+
+    # Rename metric columns to include direction arrows in the header
+    df = df.rename(
+        columns={
+            col: f"{col} {METRIC_DIRECTION[col]}"
+            for col in METRIC_COLS
+            if col in METRIC_DIRECTION
+        }
+    )
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Results")
+
+        ws = writer.sheets["Results"]
+
+        # Freeze header row
+        ws.freeze_panes = "A2"
+
+        # Auto-size columns (cap at 40 chars)
+        for col_cells in ws.columns:
+            max_len = max(
+                len(str(cell.value)) if cell.value is not None else 0
+                for cell in col_cells
+            )
+            ws.column_dimensions[col_cells[0].column_letter].width = min(
+                max_len + 2, 40
+            )
+
+        # Light header fill
+        try:
+            from openpyxl.styles import PatternFill, Font
+
+            header_fill = PatternFill(
+                start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
+            )
+            bold = Font(bold=True)
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = bold
+        except ImportError:
+            pass  # openpyxl styles not critical
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Collect TOFU results into a single Excel file."
+    )
+    parser.add_argument(
+        "saves_dir",
+        nargs="?",
+        default="saves",
+        help="Root saves directory to search (default: saves)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default="tofu_results.xlsx",
+        help="Output Excel file path (default: tofu_results.xlsx)",
+    )
+    args = parser.parse_args()
+
+    saves_dir = Path(args.saves_dir)
+    if not saves_dir.exists():
+        sys.exit(f"Error: directory not found: {saves_dir}")
+
+    rows = collect_results(saves_dir)
+    if not rows:
+        sys.exit(f"No TOFU_SUMMARY.json files found under {saves_dir}")
+
+    output = Path(args.output)
+    write_excel(rows, output)
+    print(f"Wrote {len(rows)} row(s) → {output}")
+
+
+if __name__ == "__main__":
+    main()

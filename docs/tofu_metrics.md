@@ -12,7 +12,7 @@ This document describes each metric computed by the TOFU evaluator
 | `forget_Q_A_ROUGE` | Low | No |
 | `extraction_strength` | Low | No |
 | `forget_quality` | High | Yes |
-| `privleak` | High | Yes |
+| `privleak` | Low (≈ 0%) | Yes |
 | `model_utility` | High | No |
 
 ---
@@ -102,16 +102,17 @@ forget data. This is the gold-standard unlearning criterion in TOFU.
 ### `privleak`
 
 **What it measures:** A Min-K% membership inference attack (MIA) on the forget
-split, referenced against the retain model's MIA scores. Measures how
-distinguishable forget samples are as training members compared to a model that
-never trained on them.
+split, referenced against the retain model's MIA scores. Computed as:
+`(conv_auc_unlearned − conv_auc_retain) / conv_auc_retain × 100`, where
+`conv_auc` is the conventional MIA AUC (higher = more leakage). The retain
+model's AUC is the baseline (it never saw the forget data).
 
-**Interpretation:** A score near 0 means the unlearned model leaks no more
-membership information about the forget data than the retain-only baseline. A
-high positive score means forget samples are still recognizable as training members
-— the unlearning is incomplete from a privacy standpoint.
+**Interpretation:**
+- **≈ 0%** — ideal: the unlearned model leaks no more membership information than the retain-only baseline.
+- **Positive (e.g. +50%)** — incomplete unlearning: forget samples are still recognizable as training members.
+- **Negative (e.g. −100%)** — over-unlearning: the model has forgotten so aggressively that it leaks less than the retain baseline, usually at the cost of utility.
 
-**Better = High** (score closer to 0% leakage relative to the retain baseline)
+**Better = Low (closest to 0%)** — negative values are not "more unlearned"; they signal excessive forgetting.
 
 ---
 
