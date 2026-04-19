@@ -7,7 +7,7 @@ This document describes each metric computed by the TOFU evaluator
 
 | Metric | Better after unlearning | Requires retain logs |
 |---|---|---|
-| `forget_Truth_Ratio` | Low | No |
+| `forget_Truth_Ratio` | High | No |
 | `forget_Q_A_Prob` | Low | No |
 | `forget_Q_A_ROUGE` | Low | No |
 | `extraction_strength` | Low | No |
@@ -28,11 +28,13 @@ Lower is better for all of them.
 answer and a paraphrased (wrong) answer. The truth ratio is the ratio of the
 model's probability for the correct answer vs. the perturbed answer.
 
-**Interpretation:** A well-unlearned model should assign similar (or lower) probability
-to the correct answer as to the wrong alternative. A ratio close to or below 1 means
-the model no longer "knows" the correct answer.
+**Interpretation:** The aggregator is `mean(min(p_wrong/p_correct, p_correct/p_wrong))`,
+which equals 1 when the model is indifferent between the correct and wrong answer, and
+approaches 0 when it strongly prefers either one. A well-unlearned model should assign
+similar probability to the correct and wrong answers on the forget set, giving a value
+close to 1.
 
-**Better = Low**
+**Better = High**
 
 ---
 
