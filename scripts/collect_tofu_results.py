@@ -34,6 +34,8 @@ except ImportError:
 
 METADATA_COLS = [
     "task_name",
+    "group",
+    "checkpoint",
     "model",
     "forget_split",
     "method",
@@ -67,7 +69,8 @@ METRIC_DIRECTION = {
     "model_utility":      "↑",
 }
 
-ALL_COLS = METADATA_COLS + METRIC_COLS
+# path goes last so it doesn't clutter the view when comparing metrics
+ALL_COLS = [c for c in METADATA_COLS if c != "path"] + METRIC_COLS + ["path"]
 
 # ── Task-name parsing ──────────────────────────────────────────────────────────
 
@@ -152,24 +155,47 @@ def _maybe_float(s: str):
 
 _EVALS_FORGET_RE = re.compile(r"^evals_(forget\d+)$")
 _FORGET_PART_RE = re.compile(r"^forget\d+$")
+_CHECKPOINT_RE = re.compile(r"^checkpoint-(\d+)$")
 
 
-def infer_from_path(summary_file: Path) -> tuple[str, str | None]:
+def infer_from_path(summary_file: Path) -> tuple[str, str | None, str | None, str | None]:
     """
-    Return (task_name, forget_split_override).
+    Return (task_name, forget_split_override, group, checkpoint).
 
-    task_name is the first path component that starts with 'tofu_'.
-    forget_split_override is set when the forget split can be read from the
-    path but is not encoded in task_name (e.g. full-model evals stored under
-    saves/eval/tofu_<model>_full/evals_forget10/).
+    task_name   — first path component starting with 'tofu_'
+    forget_split_override — forget split read from an 'evals_forget*' dir when
+                  not encoded in task_name (e.g. full-model evals)
+    group       — first subdirectory under 'unlearn/' that is not itself a
+                  task_name (i.e. does not start with 'tofu_'); None otherwise
+    checkpoint  — checkpoint step number (str) when the path contains a
+                  'checkpoint-{N}' component; None for final-model results
     """
     parts = summary_file.parts
     task_name: str | None = None
     forget_override: str | None = None
+    group: str | None = None
+    checkpoint: str | None = None
 
+    # Find task_name
     for part in parts:
         if part.startswith("tofu_"):
             task_name = part
+            break
+
+    # Find group: the component immediately after 'unlearn' if it is not a
+    # task_name itself
+    for i, part in enumerate(parts):
+        if part == "unlearn" and i + 1 < len(parts):
+            candidate = parts[i + 1]
+            if not candidate.startswith("tofu_"):
+                group = candidate
+            break
+
+    # Find checkpoint
+    for part in parts:
+        m = _CHECKPOINT_RE.match(part)
+        if m:
+            checkpoint = m.group(1)
             break
 
     # Detect forget split from an evals_{split} or bare forget\d+ directory
@@ -187,7 +213,7 @@ def infer_from_path(summary_file: Path) -> tuple[str, str | None]:
         parent = summary_file.parent
         task_name = parent.parent.name if parent.name.startswith("evals") else parent.name
 
-    return task_name, forget_override
+    return task_name, forget_override, group, checkpoint
 
 
 # ── Main collection ────────────────────────────────────────────────────────────
@@ -202,7 +228,7 @@ def collect_results(saves_dir: Path) -> list[dict]:
             print(f"Warning: could not read {summary_file}: {exc}", file=sys.stderr)
             continue
 
-        task_name, forget_override = infer_from_path(summary_file)
+        task_name, forget_override, group, checkpoint = infer_from_path(summary_file)
         row = parse_task_name(task_name)
 
         # For full/retain baselines the forget split is in the directory, not
@@ -210,6 +236,8 @@ def collect_results(saves_dir: Path) -> list[dict]:
         if forget_override and row["forget_split"] is None:
             row["forget_split"] = forget_override
 
+        row["group"] = group
+        row["checkpoint"] = checkpoint
         row["path"] = str(summary_file.relative_to(saves_dir))
 
         for metric in METRIC_COLS:
