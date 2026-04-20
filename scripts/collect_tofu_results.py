@@ -40,6 +40,7 @@ METADATA_COLS = [
     "forget_split",
     "method",
     "lr",
+    "scale",
     "lambda_reconstruct",
     "lambda_data",
     "lambda_orth",
@@ -82,6 +83,9 @@ _TVD_RE = re.compile(
     r"TVD_lr([^_]+)_r([^_]+)_d([^_]+)_o([^_]+)_n([^_]+)$"
 )
 
+# TaskArithmetic suffix:  TaskArithmetic_scale{scale}
+_TA_RE = re.compile(r"TaskArithmetic_scale(.+)$")
+
 # Other methods: {Method}_lr{lr}
 _METHOD_LR_RE = re.compile(r"([A-Za-z][A-Za-z0-9]*)_lr([^_].*)$")
 
@@ -115,13 +119,17 @@ def parse_task_name(task_name: str) -> dict:
             info["lambda_data"] = _maybe_float(tvd.group(3))
             info["lambda_orth"] = _maybe_float(tvd.group(4))
             info["lambda_norm"] = _maybe_float(tvd.group(5))
+        # TaskArithmetic?
+        elif ta := _TA_RE.match(method_part):
+            info["method"] = "TaskArithmetic"
+            info["scale"] = _maybe_float(ta.group(1))
         else:
             other = _METHOD_LR_RE.match(method_part)
             if other:
                 info["method"] = other.group(1)
                 info["lr"] = other.group(2)
             else:
-                # Method name only, no lr encoded
+                # Method name only, no hyperparams encoded
                 info["method"] = method_part
 
     else:

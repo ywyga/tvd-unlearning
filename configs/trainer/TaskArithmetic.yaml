@@ -1,0 +1,17 @@
+defaults:
+  - finetune
+
+handler: TaskArithmetic
+
+# method_args are passed directly to TaskArithmetic.__init__
+method_args:
+  base_model_name_or_path: ???   # required: HF Hub ID or local path to M0 (base model)
+  forget_model_path: ???         # required: local path to model fine-tuned on forget split
+  scale: 1.0                     # negation strength; 1.0 = full negation
+
+# Training is not used — train() applies the arithmetic once and returns.
+# Minimise training-related overhead in the args.
+args:
+  num_train_epochs: 1
+  do_eval: False
+  eval_on_start: False

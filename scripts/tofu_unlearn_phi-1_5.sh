@@ -20,16 +20,20 @@ set -e
 #   → saves to saves/unlearn/experiment_v1/<task_name>/
 
 model="phi-1_5"
-base_model="microsoft/phi-1_5"   # frozen M0 for TVD
+base_model="microsoft/phi-1_5"   # frozen M0 for TVD and TaskArithmetic
 
 trainers_experiments=(
-    "TVD        unlearn/tofu/default.yaml"
-    "GradAscent unlearn/tofu/default.yaml"
-    "GradDiff   unlearn/tofu/default.yaml"
-    "NPO        unlearn/tofu/default.yaml"
-    "DPO        unlearn/tofu/idk.yaml"
-    "RMU        unlearn/tofu/default.yaml"
+    "TaskArithmetic unlearn/tofu/default.yaml"
+    "TVD            unlearn/tofu/default.yaml"
+    "GradAscent     unlearn/tofu/default.yaml"
+    "GradDiff       unlearn/tofu/default.yaml"
+    "NPO            unlearn/tofu/default.yaml"
+    "DPO            unlearn/tofu/idk.yaml"
+    "RMU            unlearn/tofu/default.yaml"
 )
+
+# TaskArithmetic scale hyperparameter (negation strength)
+TA_SCALE=${TA_SCALE:-1.0}
 
 splits=(
     "forget01 holdout01 retain99"
@@ -90,10 +94,16 @@ for split in "${splits[@]}"; do
 
         model_path=saves/finetune/tofu_${model}_full
 
-        # Build trainer-specific extra args; for TVD encode lambdas in task_name
-        # so runs with different hyperparameters don't overwrite each other.
+        # Build trainer-specific extra args; encode hyperparameters in task_name
+        # so runs with different settings don't overwrite each other.
         extra_args=""
-        if [ "$trainer" = "TVD" ]; then
+        if [ "$trainer" = "TaskArithmetic" ]; then
+            forget_model_path=saves/finetune/tofu_${model}_${forget_split}
+            task_name=tofu_${model}_${forget_split}_TaskArithmetic_scale${TA_SCALE}
+            extra_args="trainer.method_args.base_model_name_or_path=${base_model} \
+                trainer.method_args.forget_model_path=${forget_model_path} \
+                trainer.method_args.scale=${TA_SCALE}"
+        elif [ "$trainer" = "TVD" ]; then
             task_name=tofu_${model}_${forget_split}_TVD_lr${LEARNING_RATE}_r${LAMBDA_RECONSTRUCT}_d${LAMBDA_DATA}_o${LAMBDA_ORTH}_n${LAMBDA_NORM}
             extra_args="trainer.method_args.base_model_name_or_path=${base_model} \
                 trainer.method_args.lambda_reconstruct=${LAMBDA_RECONSTRUCT} \

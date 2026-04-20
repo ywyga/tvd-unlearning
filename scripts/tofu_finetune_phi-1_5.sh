@@ -30,6 +30,25 @@ fi
 
 
 ########################################################################################################################
+########################################### FORGET Finetuned TOFU (required by TaskArithmetic) ########################
+########################################################################################################################
+
+for split in "${splits[@]}"; do
+    forget_split=$(echo $split | cut -d' ' -f1)
+
+    CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/tofu/default.yaml \
+        task_name=tofu_${model}_${forget_split} \
+        model=${model} \
+        ${dtype_arg} \
+        data/datasets@data.train=TOFU_QA_forget \
+        data.train.TOFU_QA_forget.args.hf_args.name=${forget_split} \
+        trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
+        trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
+        trainer.args.gradient_checkpointing=true
+done
+
+
+########################################################################################################################
 ########################################### RETAIN Finetuned TOFU ######################################################
 ########################################################################################################################
 
