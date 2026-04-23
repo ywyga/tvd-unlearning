@@ -1,0 +1,37 @@
+# @package _global_
+#
+# Fine-tune experiment config for WMDP. Used to create two prerequisite checkpoints:
+#   - M1 (combined forget+retain corpus): --config-name=train.yaml with WMDP_full dataset
+#   - M_forget (forget-only corpus):      --config-name=train.yaml with WMDP_forget dataset
+#
+# Override the dataset at invocation time:
+#   python src/train.py experiment=finetune/wmdp/default.yaml \
+#       data/datasets@data.train=WMDP_forget \
+#       data.train.WMDP_forget.args.hf_args.data_files=data/wmdp/wmdp-corpora/${data_split}-forget-corpus.jsonl
+
+defaults:
+  - override /model: phi-1_5
+  - override /trainer: finetune
+  - override /data/datasets@data.train: WMDP_full
+  - override /data: finetune
+
+data_split: cyber
+
+data:
+  train:
+    WMDP_full:
+      args:
+        hf_args:
+          data_files:
+            - "data/wmdp/wmdp-corpora/${data_split}-forget-corpus.jsonl"
+            - "data/wmdp/wmdp-corpora/${data_split}-retain-corpus.jsonl"
+
+trainer:
+  args:
+    learning_rate: 2e-5
+    num_train_epochs: 1
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 8
+    gradient_checkpointing: true
+
+task_name: ???

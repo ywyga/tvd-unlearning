@@ -16,6 +16,10 @@ Recognised task-name patterns
   tofu_{model}_{forget_split}_{method}          (no lr in name)
   tofu_{model}_full[_{forget_split}]            (finetune baseline)
   tofu_{model}_{retain_split}                  (retain baseline)
+  wmdp_{model}_{data_split}_TVD_lr{lr}_r{r}_d{d}_o{o}_n{n}_ms{N}
+  wmdp_{model}_{data_split}_{method}_lr{lr}_ms{N}
+  wmdp_{model}_{data_split}_TaskArithmetic_scale{s}
+  wmdp_{model}_{data_split}_full               (finetune baseline)
 """
 
 import argparse
@@ -38,9 +42,11 @@ METADATA_COLS = [
     "checkpoint",
     "model",
     "forget_split",
+    "data_split",
     "method",
     "lr",
     "scale",
+    "max_samples",
     "lambda_reconstruct",
     "lambda_data",
     "lambda_orth",
@@ -86,11 +92,48 @@ _TVD_RE = re.compile(
 # TaskArithmetic suffix:  TaskArithmetic_scale{scale}
 _TA_RE = re.compile(r"TaskArithmetic_scale(.+)$")
 
-# Other methods: {Method}_lr{lr}
-_METHOD_LR_RE = re.compile(r"([A-Za-z][A-Za-z0-9]*)_lr([^_].*)$")
-
 # Retain split names: retain99 / retain95 / retain90
 _RETAIN_RE = re.compile(r"retain\d+$")
+
+# WMDP data splits: cyber / bio / chem
+_WMDP_SPLIT_RE = re.compile(r"_(cyber|bio|chem)_(.*)")
+
+# Trailing _ms{N} suffix (max_samples encoded in task name)
+_MS_RE = re.compile(r"_ms(\d+)$")
+
+
+def _parse_method_part(method_part: str, info: dict) -> None:
+    """Parse the method+hparams suffix into info dict (mutates in place)."""
+    # Strip trailing _ms{N} (max_samples) before method parsing
+    ms = _MS_RE.search(method_part)
+    if ms:
+        info["max_samples"] = int(ms.group(1))
+        method_part = method_part[: ms.start()]
+
+    # TVD?
+    tvd = _TVD_RE.match(method_part)
+    if tvd:
+        info["method"] = "TVD"
+        info["lr"] = tvd.group(1)
+        info["lambda_reconstruct"] = _maybe_float(tvd.group(2))
+        info["lambda_data"] = _maybe_float(tvd.group(3))
+        info["lambda_orth"] = _maybe_float(tvd.group(4))
+        info["lambda_norm"] = _maybe_float(tvd.group(5))
+        return
+    # TaskArithmetic?
+    ta = _TA_RE.match(method_part)
+    if ta:
+        info["method"] = "TaskArithmetic"
+        info["scale"] = _maybe_float(ta.group(1))
+        return
+    # Other method with lr
+    other = re.match(r"([A-Za-z][A-Za-z0-9]*)_lr(.+)$", method_part)
+    if other:
+        info["method"] = other.group(1)
+        info["lr"] = other.group(2)
+        return
+    # Method name only, no hyperparams encoded
+    info["method"] = method_part
 
 
 def parse_task_name(task_name: str) -> dict:
@@ -98,6 +141,24 @@ def parse_task_name(task_name: str) -> dict:
     info: dict = {k: None for k in METADATA_COLS}
     info["task_name"] = task_name
 
+    # ── WMDP task names ────────────────────────────────────────────────────────
+    if task_name.startswith("wmdp_"):
+        body = task_name[len("wmdp_"):]
+        m = _WMDP_SPLIT_RE.search(body)
+        if m:
+            info["model"] = body[: m.start()]
+            info["data_split"] = m.group(1)
+            method_part = m.group(2)
+            # Finetune baselines: wmdp_{model}_{split}_full or _forget
+            if method_part in ("full", "forget"):
+                info["method"] = method_part
+            else:
+                _parse_method_part(method_part, info)
+        else:
+            info["model"] = body
+        return info
+
+    # ── TOFU task names ────────────────────────────────────────────────────────
     if not task_name.startswith("tofu_"):
         return info
 
@@ -108,29 +169,7 @@ def parse_task_name(task_name: str) -> dict:
     if m:
         info["model"] = body[: m.start()]
         info["forget_split"] = m.group(1)
-        method_part = m.group(2)
-
-        # TVD?
-        tvd = _TVD_RE.match(method_part)
-        if tvd:
-            info["method"] = "TVD"
-            info["lr"] = tvd.group(1)
-            info["lambda_reconstruct"] = _maybe_float(tvd.group(2))
-            info["lambda_data"] = _maybe_float(tvd.group(3))
-            info["lambda_orth"] = _maybe_float(tvd.group(4))
-            info["lambda_norm"] = _maybe_float(tvd.group(5))
-        # TaskArithmetic?
-        elif ta := _TA_RE.match(method_part):
-            info["method"] = "TaskArithmetic"
-            info["scale"] = _maybe_float(ta.group(1))
-        else:
-            other = _METHOD_LR_RE.match(method_part)
-            if other:
-                info["method"] = other.group(1)
-                info["lr"] = other.group(2)
-            else:
-                # Method name only, no hyperparams encoded
-                info["method"] = method_part
+        _parse_method_part(m.group(2), info)
 
     else:
         # No forget split → finetune baseline (full or retain)
@@ -261,9 +300,9 @@ def collect_results(saves_dir: Path) -> list[dict]:
 def write_excel(rows: list[dict], output: Path) -> None:
     df = pd.DataFrame(rows, columns=ALL_COLS)
 
-    # Sort: model → forget_split → method, putting None last
+    # Sort: model → forget_split → data_split → method, putting None last
     df = df.sort_values(
-        ["model", "forget_split", "method"],
+        ["model", "forget_split", "data_split", "method"],
         key=lambda col: col.fillna("\xff"),  # sorts None/NaN after real strings
         na_position="last",
     )

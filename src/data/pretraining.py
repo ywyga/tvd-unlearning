@@ -61,12 +61,18 @@ class CompletionDataset(Dataset):
 
 class PretrainingDataset(Dataset):
     def __init__(
-        self, hf_args, template_args, tokenizer, text_key="text", max_length=2048
+        self, hf_args, template_args, tokenizer, text_key="text", max_length=2048,
+        max_samples=None, shuffle_seed=None
     ):
         super(PretrainingDataset, self).__init__()
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.chunks = self._chunk_raw_text(load_hf_dataset(**hf_args)[text_key])
+        raw = load_hf_dataset(**hf_args)
+        if max_samples is not None:
+            if shuffle_seed is not None:
+                raw = raw.shuffle(seed=shuffle_seed)
+            raw = raw.select(range(min(max_samples, len(raw))))
+        self.chunks = self._chunk_raw_text(raw[text_key])
 
     def _chunk_raw_text(self, raw_text):
         raw_text = "\n\n".join(raw_text)
