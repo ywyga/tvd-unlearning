@@ -13,6 +13,7 @@ defaults:
   - override /trainer: finetune
   - override /data/datasets@data.train: WMDP_full
   - override /data: finetune
+  - override /eval: null
 
 data_split: cyber
 
@@ -23,6 +24,7 @@ trainer:
     per_device_train_batch_size: 4
     gradient_accumulation_steps: 8
     gradient_checkpointing: true
+    eval_strategy: 'no'
     do_eval: false
     eval_on_start: false
 
