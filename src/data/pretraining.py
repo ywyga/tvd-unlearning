@@ -76,9 +76,16 @@ class PretrainingDataset(Dataset):
 
     def _chunk_raw_text(self, raw_text):
         raw_text = "\n\n".join(raw_text)
-        full_token_sequence = self.tokenizer(raw_text, add_special_tokens=False)[
-            "input_ids"
-        ]
+        # Temporarily raise model_max_length to suppress the spurious length warning.
+        # Tokenizing the full corpus at once before chunking is intentional here.
+        old_max_len = self.tokenizer.model_max_length
+        self.tokenizer.model_max_length = int(1e30)
+        try:
+            full_token_sequence = self.tokenizer(raw_text, add_special_tokens=False)[
+                "input_ids"
+            ]
+        finally:
+            self.tokenizer.model_max_length = old_max_len
         num_chunks = len(full_token_sequence) // self.max_length + 1
         chunks = []
         for i in range(num_chunks):
