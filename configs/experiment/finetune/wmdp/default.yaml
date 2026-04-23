@@ -4,10 +4,9 @@
 #   - M1 (combined forget+retain corpus): --config-name=train.yaml with WMDP_full dataset
 #   - M_forget (forget-only corpus):      --config-name=train.yaml with WMDP_forget dataset
 #
-# Override the dataset at invocation time:
-#   python src/train.py experiment=finetune/wmdp/default.yaml \
-#       data/datasets@data.train=WMDP_forget \
-#       data.train.WMDP_forget.args.hf_args.data_files=data/wmdp/wmdp-corpora/${data_split}-forget-corpus.jsonl
+# Override the dataset at invocation time (data_split drives the file path via interpolation):
+#   data/datasets@data.train=WMDP_forget   → forget-only corpus
+#   (default)                               → combined forget+retain corpus (WMDP_full)
 
 defaults:
   - override /model: phi-1_5
@@ -16,15 +15,6 @@ defaults:
   - override /data: finetune
 
 data_split: cyber
-
-data:
-  train:
-    WMDP_full:
-      args:
-        hf_args:
-          data_files:
-            - "data/wmdp/wmdp-corpora/${data_split}-forget-corpus.jsonl"
-            - "data/wmdp/wmdp-corpora/${data_split}-retain-corpus.jsonl"
 
 trainer:
   args:
