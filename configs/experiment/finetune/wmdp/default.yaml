@@ -15,6 +15,7 @@ defaults:
   - override /data: finetune
   - override /eval: null
 
+mode: finetune
 data_split: cyber
 
 trainer:
