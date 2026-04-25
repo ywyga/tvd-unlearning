@@ -7,3 +7,5 @@ WMDP_forget:
       split: "train"
     text_key: "text"
     max_length: 512
+    max_samples: null
+    shuffle_seed: null
