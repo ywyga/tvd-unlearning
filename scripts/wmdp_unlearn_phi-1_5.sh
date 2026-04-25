@@ -27,7 +27,6 @@ base_model="microsoft/phi-1_5"   # frozen M0 for TVD and TaskArithmetic
 data_split="cyber"
 
 model_path="saves/finetune/wmdp_${model}_${data_split}_full"
-forget_model_path="saves/finetune/wmdp_${model}_${data_split}_forget"
 
 trainers_experiments=(
     "TaskArithmetic unlearn/wmdp/task_arithmetic.yaml"
@@ -72,6 +71,16 @@ LAMBDA_NORM=${LAMBDA_NORM:-0.01}
 MAX_SAMPLES=${MAX_SAMPLES:-200}
 SUBSET_SEED=${SUBSET_SEED:-42}
 
+# Choose M_forget checkpoint based on whether subset or full corpus training.
+# For TaskArithmetic to be fair, it should use the same subset as other methods.
+if [ -n "${MAX_SAMPLES}" ] && [ "${MAX_SAMPLES}" = "200" ] && [ "${SUBSET_SEED}" = "42" ]; then
+    # Standard subset training: use M_forget_subset (trained on 200 samples)
+    forget_model_path="saves/finetune/wmdp_${model}_${data_split}_forget_subset"
+else
+    # Full corpus or non-standard subset: use M_forget_full
+    forget_model_path="saves/finetune/wmdp_${model}_${data_split}_forget"
+fi
+
 # Build the max_samples override block (applied to all gradient-based methods).
 # Empty when MAX_SAMPLES is unset to allow full-corpus runs.
 if [ -n "${MAX_SAMPLES}" ]; then
@@ -103,7 +112,7 @@ for trainer_experiment in "${trainers_experiments[@]}"; do
             echo "Run scripts/wmdp_finetune_phi-1_5.sh first."
             exit 1
         fi
-        task_name=wmdp_${model}_${data_split}_TaskArithmetic_scale${TA_SCALE}
+        task_name=wmdp_${model}_${data_split}_TaskArithmetic_scale${TA_SCALE}${ms_suffix}
         extra_args="trainer.method_args.base_model_name_or_path=${base_model} \
             trainer.method_args.forget_model_path=${forget_model_path} \
             trainer.method_args.scale=${TA_SCALE}"

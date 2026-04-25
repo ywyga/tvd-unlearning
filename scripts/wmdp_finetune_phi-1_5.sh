@@ -1,14 +1,16 @@
 #!/bin/bash
 set -e
 #
-# Finetunes microsoft/phi-1_5 on WMDP-cyber corpus to create two prerequisite
+# Finetunes microsoft/phi-1_5 on WMDP-cyber corpus to create three prerequisite
 # checkpoints required by TVD and TaskArithmetic:
 #
-#   saves/finetune/wmdp_phi-1_5_cyber_full/    — M1: combined forget+retain corpus
-#   saves/finetune/wmdp_phi-1_5_cyber_forget/  — M_forget: forget-only corpus
+#   saves/finetune/wmdp_phi-1_5_cyber_forget_subset/   — M_forget_subset: 200 forget samples (seed 42)
+#   saves/finetune/wmdp_phi-1_5_cyber_forget/          — M_forget_full: entire forget corpus
+#   saves/finetune/wmdp_phi-1_5_cyber_full/            — M1: combined forget+retain corpus
 #
-# M1 is the starting point for TVD unlearning.
-# M_forget is used by TaskArithmetic to build the forget task vector.
+# When doing subset training (MAX_SAMPLES=200): TaskArithmetic uses M_forget_subset
+# When doing full corpus training: TaskArithmetic uses M_forget_full
+# M1 is the starting point for TVD and all gradient-based unlearning methods.
 #
 # Usage:
 #   bash scripts/wmdp_finetune_phi-1_5.sh
@@ -35,12 +37,32 @@ fi
 
 
 ########################################################################################################################
-# M_forget — fine-tune on forget-only corpus (required by TaskArithmetic)
+# M_forget_subset — fine-tune on 200 forget samples (seed 42, required by TaskArithmetic for subset experiments)
+########################################################################################################################
+
+task_name=wmdp_${model}_${data_split}_forget_subset
+
+echo "Finetuning ${model} on WMDP ${data_split}-forget corpus (200 samples, seed 42) → ${task_name}"
+
+CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/wmdp/default.yaml \
+    task_name=${task_name} \
+    model=${model} \
+    ${dtype_arg} \
+    data/datasets@data.train=WMDP_forget \
+    "data.train.WMDP_forget.args.hf_args.data_files=data/wmdp/wmdp-corpora/${data_split}-forget-corpus.jsonl" \
+    data.train.WMDP_forget.args.max_samples=200 \
+    data.train.WMDP_forget.args.shuffle_seed=42 \
+    trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
+    trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps}
+
+
+########################################################################################################################
+# M_forget_full — fine-tune on entire forget corpus (baseline for TaskArithmetic)
 ########################################################################################################################
 
 task_name=wmdp_${model}_${data_split}_forget
 
-echo "Finetuning ${model} on WMDP ${data_split}-forget corpus → ${task_name}"
+echo "Finetuning ${model} on WMDP ${data_split}-forget corpus (full) → ${task_name}"
 
 CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/wmdp/default.yaml \
     task_name=${task_name} \
@@ -68,5 +90,6 @@ CUDA_VISIBLE_DEVICES=${gpu} python src/train.py experiment=finetune/wmdp/default
     trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps}
 
 echo "Finetune complete."
-echo "  M1       → saves/finetune/wmdp_${model}_${data_split}_full/"
-echo "  M_forget → saves/finetune/wmdp_${model}_${data_split}_forget/"
+echo "  M_forget_subset → saves/finetune/wmdp_${model}_${data_split}_forget_subset/"
+echo "  M_forget_full   → saves/finetune/wmdp_${model}_${data_split}_forget/"
+echo "  M1              → saves/finetune/wmdp_${model}_${data_split}_full/"
