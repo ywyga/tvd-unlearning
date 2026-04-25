@@ -6,9 +6,16 @@ set -e
 # Each run gets a unique task_name so results never overwrite each other.
 #
 # Prerequisites:
-#   The forget-only finetune checkpoint must exist before running this sweep:
+#   The finetune checkpoints must exist before running this sweep:
 #     bash scripts/wmdp_finetune_phi-1_5.sh
-#   This produces saves/finetune/wmdp_phi-1_5_cyber_forget/
+#   This produces:
+#     saves/finetune/wmdp_phi-1_5_cyber_forget_subset/  (200 samples, seed 42)
+#     saves/finetune/wmdp_phi-1_5_cyber_forget/         (full corpus)
+#     saves/finetune/wmdp_phi-1_5_cyber_full/           (M1)
+#
+# By default, this sweep uses M_forget_full (entire corpus). To sweep with the
+# 200-sample subset, set SUBSET_TRAINING=1:
+#   SUBSET_TRAINING=1 bash scripts/wmdp_ta_sweep_phi-1_5.sh
 #
 # Usage:
 #   bash scripts/wmdp_ta_sweep_phi-1_5.sh
@@ -66,6 +73,16 @@ else
     data_splits=("cyber")
 fi
 
+# Use subset training (M_forget_subset) if requested, otherwise full corpus (M_forget_full)
+SUBSET_TRAINING=${SUBSET_TRAINING:-0}
+if [ "$SUBSET_TRAINING" = "1" ]; then
+    forget_suffix="_subset"
+    sweep_name="subset"
+else
+    forget_suffix=""
+    sweep_name="full"
+fi
+
 ########################################################################################################################
 # Sweep
 ########################################################################################################################
@@ -75,11 +92,11 @@ run=0
 
 for data_split in "${data_splits[@]}"; do
     model_path="saves/finetune/wmdp_${model}_${data_split}_full"
-    forget_model_path="saves/finetune/wmdp_${model}_${data_split}_forget"
+    forget_model_path="saves/finetune/wmdp_${model}_${data_split}_forget${forget_suffix}"
 
     if [ ! -d "$forget_model_path" ]; then
         echo "Error: forget model not found at ${forget_model_path}"
-        echo "Run scripts/wmdp_finetune_phi-1_5.sh first to produce the forget-only checkpoint."
+        echo "Run scripts/wmdp_finetune_phi-1_5.sh first to produce the necessary checkpoints."
         exit 1
     fi
 
@@ -90,7 +107,7 @@ for data_split in "${data_splits[@]}"; do
     fi
 
     for scale in "${scales[@]}"; do
-        task_name=wmdp_${model}_${data_split}_TaskArithmetic_scale${scale}
+        task_name=wmdp_${model}_${data_split}_TaskArithmetic_scale${scale}${forget_suffix:+_ms200}
         run=$(( run + 1 ))
         echo "[$run/$total] ${task_name}"
 
