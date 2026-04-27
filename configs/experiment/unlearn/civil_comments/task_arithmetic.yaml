@@ -1,0 +1,41 @@
+# @package _global_
+#
+# TaskArithmetic unlearn config for Civil Comments with phi-1_5.
+# Closed-form: no training loop — arithmetic is applied once then model is saved.
+#
+# Prerequisites:
+#   saves/finetune/civil_comments_phi-1_5_full/          — M1 (starting model)
+#   saves/finetune/civil_comments_phi-1_5_forget/        — M_forget (toxic-only finetune)
+#   microsoft/phi-1_5                                     — M0 (base model)
+#
+# Usage (via civil_comments_unlearn_phi-1_5.sh — do not run directly):
+#   python src/train.py --config-name=unlearn.yaml \
+#       experiment=unlearn/civil_comments/task_arithmetic.yaml \
+#       trainer=TaskArithmetic \
+#       task_name=<name> \
+#       model.model_args.pretrained_model_name_or_path=saves/finetune/civil_comments_phi-1_5_full \
+#       trainer.method_args.base_model_name_or_path=microsoft/phi-1_5 \
+#       trainer.method_args.forget_model_path=saves/finetune/civil_comments_phi-1_5_forget \
+#       trainer.method_args.scale=1.0
+
+defaults:
+  - override /model: phi-1_5
+  - override /trainer: TaskArithmetic
+  - override /data: unlearn
+  - override /data/datasets@data.forget: CIVIL_COMMENTS_forget
+  - override /data/datasets@data.retain: CIVIL_COMMENTS_retain
+  - override /eval: detoxify
+
+data:
+  anchor: forget
+  forget:
+    CIVIL_COMMENTS_forget: {}
+  retain:
+    CIVIL_COMMENTS_retain: {}
+
+collator:
+  DataCollatorForSupervisedDataset:
+    args:
+      padding_side: right
+
+task_name: ???

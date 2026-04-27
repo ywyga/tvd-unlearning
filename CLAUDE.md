@@ -12,6 +12,7 @@ OpenUnlearning is a unified benchmarking framework for LLM machine unlearning â€
 ```bash
 pip install -e .                     # Core install
 pip install -e ".[lm-eval]"          # With lm-evaluation-harness support
+pip install -e ".[detoxify]"         # With Detoxify toxicity evaluation support
 pip install -e ".[dev]"              # With dev tools (ruff, pre-commit)
 ```
 
@@ -52,9 +53,12 @@ bash scripts/tofu_finetune.sh
 bash scripts/tofu_finetune_phi-1_5.sh          # prereqs: full/retain/forget checkpoints
 bash scripts/tofu_unlearn_phi-1_5.sh           # all methods on TOFU
 bash scripts/tofu_ta_sweep_phi-1_5.sh          # TaskArithmetic scale sweep (TOFU)
-bash scripts/wmdp_finetune_phi-1_5.sh          # prereqs: M1 + M_forget checkpoints
-bash scripts/wmdp_unlearn_phi-1_5.sh           # all methods on WMDP-cyber (subset training)
-bash scripts/wmdp_ta_sweep_phi-1_5.sh          # TaskArithmetic scale sweep (WMDP)
+bash scripts/wmdp_finetune_phi-1_5.sh              # prereqs: M1 + M_forget checkpoints
+bash scripts/wmdp_unlearn_phi-1_5.sh               # all methods on WMDP-cyber (subset training)
+bash scripts/wmdp_ta_sweep_phi-1_5.sh              # TaskArithmetic scale sweep (WMDP)
+bash scripts/civil_comments_finetune_phi-1_5.sh    # prereqs: M1 + M_forget checkpoints (Civil Comments)
+bash scripts/civil_comments_unlearn_phi-1_5.sh     # all methods on Civil Comments toxicity (subset training)
+bash scripts/civil_comments_ta_sweep_phi-1_5.sh    # TaskArithmetic scale sweep (Civil Comments)
 ```
 
 **Collect results** (aggregate TOFU/WMDP eval outputs into Excel):

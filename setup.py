@@ -20,6 +20,9 @@ setup(
         "lm-eval": [
             "lm-eval==0.4.11",
         ],  # Install using `pip install ".[lm-eval]"`
+        "detoxify": [
+            "detoxify>=0.5.0",
+        ],  # Install using `pip install ".[detoxify]"`
         "dev": [
             "pre-commit==4.0.1",
             "ruff==0.6.9",

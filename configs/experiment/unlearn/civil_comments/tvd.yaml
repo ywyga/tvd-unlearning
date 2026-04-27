@@ -1,0 +1,56 @@
+# @package _global_
+#
+# TVD unlearn config for Civil Comments with phi-1_5.
+#
+# Prerequisites:
+#   saves/finetune/civil_comments_phi-1_5_full/   — M1 (combined corpus finetune)
+#   microsoft/phi-1_5                              — M0 (base model)
+#
+# Usage (via civil_comments_unlearn_phi-1_5.sh — do not run directly):
+#   python src/train.py --config-name=unlearn.yaml \
+#       experiment=unlearn/civil_comments/tvd.yaml \
+#       trainer=TVD \
+#       task_name=<name> \
+#       model.model_args.pretrained_model_name_or_path=saves/finetune/civil_comments_phi-1_5_full \
+#       trainer.method_args.base_model_name_or_path=microsoft/phi-1_5 \
+#       data.forget.CIVIL_COMMENTS_forget.args.max_samples=200 \
+#       data.forget.CIVIL_COMMENTS_forget.args.shuffle_seed=42 \
+#       data.retain.CIVIL_COMMENTS_retain.args.max_samples=200 \
+#       data.retain.CIVIL_COMMENTS_retain.args.shuffle_seed=42
+
+defaults:
+  - override /model: phi-1_5
+  - override /trainer: TVD
+  - override /data: unlearn
+  - override /data/datasets@data.forget: CIVIL_COMMENTS_forget
+  - override /data/datasets@data.retain: CIVIL_COMMENTS_retain
+  - override /eval: detoxify
+
+data:
+  anchor: forget
+  forget:
+    CIVIL_COMMENTS_forget:
+      args:
+        max_samples: 200
+        shuffle_seed: 42
+  retain:
+    CIVIL_COMMENTS_retain:
+      args:
+        max_samples: 200
+        shuffle_seed: 42
+
+collator:
+  DataCollatorForSupervisedDataset:
+    args:
+      padding_side: right
+
+trainer:
+  args:
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 8
+    learning_rate: 1e-5
+    num_train_epochs: 5
+    gradient_checkpointing: false   # required by TVD (two forward passes per step)
+    lr_scheduler_type: constant
+
+task_name: ???
