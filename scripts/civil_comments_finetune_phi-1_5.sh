@@ -55,6 +55,7 @@ else
     ddp_arg=""
 fi
 
+num_train_epochs=3
 
 ########################################################################################################################
 # M_forget_subset — fine-tune on 200 toxic samples (seed 42, required by TaskArithmetic for subset experiments)
@@ -74,6 +75,7 @@ ${launch} src/train.py experiment=finetune/civil_comments/default.yaml \
     data.train.CIVIL_COMMENTS_forget.args.shuffle_seed=42 \
     trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
     trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
+    trainer.args.num_train_epochs=${num_train_epochs} \
     ${ddp_arg}
 
 
@@ -92,6 +94,7 @@ ${launch} src/train.py experiment=finetune/civil_comments/default.yaml \
     data/datasets@data.train=CIVIL_COMMENTS_forget \
     trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
     trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
+    trainer.args.num_train_epochs=${num_train_epochs} \
     ${ddp_arg}
 
 
@@ -109,6 +112,7 @@ ${launch} src/train.py experiment=finetune/civil_comments/default.yaml \
     ${dtype_arg} \
     trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
     trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
+    trainer.args.num_train_epochs=${num_train_epochs} \
     ${ddp_arg}
 
 echo "Finetune complete."
