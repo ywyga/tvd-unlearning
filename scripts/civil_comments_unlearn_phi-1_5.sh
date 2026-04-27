@@ -14,7 +14,7 @@ set -e
 #
 # Subset consistency: when MAX_SAMPLES=200, all gradient-based methods receive
 # data.forget.CIVIL_COMMENTS_forget.args.max_samples=200 and shuffle_seed=42.
-# TaskArithmetic uses the M_forget_subset checkpoint (trained on those same 200 samples).
+# TaskArithmetic uses the M_forget_subset_N checkpoint (trained on those same N samples).
 #
 # TVD-specific lambda overrides:
 #   LAMBDA_RECONSTRUCT=1.0 LAMBDA_DATA=1.0 bash scripts/civil_comments_unlearn_phi-1_5.sh
@@ -76,11 +76,11 @@ SUBSET_SEED=${SUBSET_SEED:-42}
 
 # Choose M_forget checkpoint based on whether subset or full corpus training.
 # For TaskArithmetic to be fair, it should use the same subset as other methods.
-if [ -n "${MAX_SAMPLES}" ] && [ "${MAX_SAMPLES}" = "200" ] && [ "${SUBSET_SEED}" = "42" ]; then
-    # Standard subset training: use M_forget_subset (trained on 200 samples)
-    forget_model_path="saves/finetune/civil_comments_${model}_forget_subset"
+if [ -n "${MAX_SAMPLES}" ]; then
+    # Subset training: use M_forget_subset_N (trained on N samples)
+    forget_model_path="saves/finetune/civil_comments_${model}_forget_subset_${MAX_SAMPLES}"
 else
-    # Full corpus or non-standard subset: use M_forget_full
+    # Full corpus: use M_forget_full
     forget_model_path="saves/finetune/civil_comments_${model}_forget"
 fi
 

@@ -9,9 +9,9 @@ set -e
 #   The finetune checkpoints must exist before running this sweep:
 #     bash scripts/civil_comments_finetune_phi-1_5.sh
 #   This produces:
-#     saves/finetune/civil_comments_phi-1_5_forget_subset/  (200 samples, seed 42)
-#     saves/finetune/civil_comments_phi-1_5_forget/         (full toxic corpus)
-#     saves/finetune/civil_comments_phi-1_5_full/           (M1)
+#     saves/finetune/civil_comments_phi-1_5_forget_subset_200/  (200 samples, seed 42)
+#     saves/finetune/civil_comments_phi-1_5_forget/             (full toxic corpus)
+#     saves/finetune/civil_comments_phi-1_5_full/               (M1)
 #
 # By default, this sweep uses M_forget_full (entire toxic corpus). To sweep with the
 # 200-sample subset (for fair comparison with gradient methods), set SUBSET_TRAINING=1:
@@ -60,11 +60,12 @@ scales=(
     "2.0"
 )
 
-# Use subset training (M_forget_subset) if requested, otherwise full corpus (M_forget_full)
+# Use subset training (M_forget_subset_N) if requested, otherwise full corpus (M_forget_full)
 SUBSET_TRAINING=${SUBSET_TRAINING:-0}
+SUBSET_SAMPLES=${SUBSET_SAMPLES:-200}
 if [ "$SUBSET_TRAINING" = "1" ]; then
-    forget_model_path="saves/finetune/civil_comments_${model}_forget_subset"
-    forget_suffix="_ms200"
+    forget_model_path="saves/finetune/civil_comments_${model}_forget_subset_${SUBSET_SAMPLES}"
+    forget_suffix="_ms${SUBSET_SAMPLES}"
 else
     forget_model_path="saves/finetune/civil_comments_${model}_forget"
     forget_suffix=""

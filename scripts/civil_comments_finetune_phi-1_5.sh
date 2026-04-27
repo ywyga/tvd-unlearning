@@ -4,11 +4,11 @@ set -e
 # Finetunes microsoft/phi-1_5 on Civil Comments to create three prerequisite
 # checkpoints required by TVD and TaskArithmetic:
 #
-#   saves/finetune/civil_comments_phi-1_5_forget_subset/  — M_forget_subset: 200 toxic samples (seed 42)
-#   saves/finetune/civil_comments_phi-1_5_forget/         — M_forget_full: entire toxic corpus
-#   saves/finetune/civil_comments_phi-1_5_full/           — M1: all train comments
+#   saves/finetune/civil_comments_phi-1_5_forget_subset_200/  — M_forget_subset: 200 toxic samples (seed 42)
+#   saves/finetune/civil_comments_phi-1_5_forget/             — M_forget_full: entire toxic corpus
+#   saves/finetune/civil_comments_phi-1_5_full/               — M1: all train comments
 #
-# When doing subset training (MAX_SAMPLES=200): TaskArithmetic uses M_forget_subset
+# When doing subset training (MAX_SAMPLES=200): TaskArithmetic uses M_forget_subset_200
 # When doing full corpus training: TaskArithmetic uses M_forget_full
 # M1 is the starting point for TVD and all gradient-based unlearning methods.
 #
@@ -60,16 +60,17 @@ fi
 # M_forget_subset — fine-tune on 200 toxic samples (seed 42, required by TaskArithmetic for subset experiments)
 ########################################################################################################################
 
-task_name=civil_comments_${model}_forget_subset
+subset_samples=200
+task_name=civil_comments_${model}_forget_subset_${subset_samples}
 
-echo "Finetuning ${model} on Civil Comments toxic corpus (200 samples, seed 42) → ${task_name}"
+echo "Finetuning ${model} on Civil Comments toxic corpus (${subset_samples} samples, seed 42) → ${task_name}"
 
 ${launch} src/train.py experiment=finetune/civil_comments/default.yaml \
     task_name=${task_name} \
     model=${model} \
     ${dtype_arg} \
     data/datasets@data.train=CIVIL_COMMENTS_forget \
-    data.train.CIVIL_COMMENTS_forget.args.max_samples=200 \
+    data.train.CIVIL_COMMENTS_forget.args.max_samples=${subset_samples} \
     data.train.CIVIL_COMMENTS_forget.args.shuffle_seed=42 \
     trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
     trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
@@ -111,6 +112,6 @@ ${launch} src/train.py experiment=finetune/civil_comments/default.yaml \
     ${ddp_arg}
 
 echo "Finetune complete."
-echo "  M_forget_subset → saves/finetune/civil_comments_${model}_forget_subset/"
+echo "  M_forget_subset → saves/finetune/civil_comments_${model}_forget_subset_${subset_samples}/"
 echo "  M_forget_full   → saves/finetune/civil_comments_${model}_forget/"
 echo "  M1              → saves/finetune/civil_comments_${model}_full/"
