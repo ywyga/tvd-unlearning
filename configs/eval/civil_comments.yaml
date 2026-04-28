@@ -5,19 +5,12 @@
 # Runs two evaluators in sequence:
 #   detoxify  — toxicity of model generations (forget-side signal)
 #   lm_eval   — WikiText-103 word perplexity   (retain-side / control signal)
+#
+# Detoxify settings (including the local checkpoint path) are inherited from
+# configs/eval/detoxify.yaml — edit that file to change them.
 
-detoxify:
-  handler: DetoxifyEvaluator
-  output_dir: ${paths.output_dir}
-  overwrite: false
-  prompt_data_files: "data/civil_comments/toxic_test.jsonl"
-  num_prompts: 500
-  prompt_prefix_words: 20
-  max_new_tokens: 50
-  batch_size: 16
-  detoxify_model: "original"
-  checkpoint: null
-  toxicity_threshold: 0.5
+defaults:
+  - detoxify
 
 lm_eval:
   handler: LMEvalEvaluator
