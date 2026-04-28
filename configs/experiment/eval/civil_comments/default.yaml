@@ -2,6 +2,6 @@
 
 defaults:
   - override /model: phi-1_5
-  - override /eval: detoxify
+  - override /eval: civil_comments
 
 task_name: ???

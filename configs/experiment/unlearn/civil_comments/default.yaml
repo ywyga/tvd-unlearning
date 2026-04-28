@@ -23,7 +23,7 @@ defaults:
   - override /data: unlearn
   - override /data/datasets@data.forget: CIVIL_COMMENTS_forget
   - override /data/datasets@data.retain: CIVIL_COMMENTS_retain
-  - override /eval: detoxify
+  - override /eval: civil_comments
 
 data:
   anchor: forget
