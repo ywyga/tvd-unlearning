@@ -61,16 +61,18 @@ bash scripts/civil_comments_unlearn_phi-1_5.sh     # all methods on Civil Commen
 bash scripts/civil_comments_ta_sweep_phi-1_5.sh    # TaskArithmetic scale sweep (Civil Comments)
 ```
 
-**Collect results** (aggregate TOFU/WMDP eval outputs into Excel):
+**Collect results** (aggregate eval outputs into Excel):
 ```bash
 python scripts/collect_tofu_results.py saves/ --output results.xlsx
+python scripts/collect_civil_comments_results.py saves/ --output civil_comments_results.xlsx
 ```
 
 **Data setup**:
 ```bash
-python setup_data.py --eval_logs   # Download pre-computed eval logs
-python setup_data.py --idk         # Download IDK dataset variant
-python setup_data.py --wmdp        # Download WMDP dataset
+python setup_data.py --eval_logs      # Download pre-computed eval logs
+python setup_data.py --idk            # Download IDK dataset variant
+python setup_data.py --wmdp           # Download WMDP dataset
+python setup_data.py --civil_comments # Download and filter Civil Comments dataset
 ```
 
 ## Architecture
