@@ -113,8 +113,10 @@ class DetoxifyEvaluator(Evaluator):
             model, tokenizer, prompts, cfg.max_new_tokens, cfg.batch_size
         )
 
-        logger.info(f"Scoring {len(continuations)} continuations with Detoxify ({cfg.detoxify_model})")
-        scorer = Detoxify(cfg.detoxify_model)
+        checkpoint = cfg.get("checkpoint", None)
+        ckpt_info = f", checkpoint={checkpoint}" if checkpoint else ""
+        logger.info(f"Scoring {len(continuations)} continuations with Detoxify ({cfg.detoxify_model}{ckpt_info})")
+        scorer = Detoxify(cfg.detoxify_model, checkpoint=checkpoint)
         scores = scorer.predict(continuations)
         toxicity_scores = scores["toxicity"]
 
