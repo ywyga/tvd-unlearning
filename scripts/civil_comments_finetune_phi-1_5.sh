@@ -61,7 +61,7 @@ num_train_epochs=3
 # M_forget_subset — fine-tune on 200 toxic samples (seed 42, required by TaskArithmetic for subset experiments)
 ########################################################################################################################
 
-subset_samples=200
+subset_samples=${SUBSET_SAMPLES:-200}
 task_name=civil_comments_${model}_forget_subset_${subset_samples}
 
 echo "Finetuning ${model} on Civil Comments toxic corpus (${subset_samples} samples, seed 42) → ${task_name}"
